@@ -5,7 +5,6 @@ import (
 
 	// Developed on https://github.com/DataDog/datadog-go/tree/a27810dd518c69be741a7fd5d0e39f674f615be8
 	"github.com/DataDog/datadog-go/statsd"
-	"github.com/myteksi/hystrix-go/hystrix"
 	"github.com/myteksi/hystrix-go/hystrix/metric_collector"
 )
 
@@ -109,10 +108,9 @@ func NewDatadogCollector(addr, prefix string) (func(string) metricCollector.Metr
 func NewDatadogCollectorWithClient(client DatadogClient) func(string) metricCollector.MetricCollector {
 
 	return func(name string) metricCollector.MetricCollector {
-		circuit, _, _ := hystrix.GetCircuit(name)
 		return &DatadogCollector{
 			client: client,
-			tags:   []string{"hystrixcircuit:" + circuit.Name, "commandGroup:" + circuit.CommandGroup},
+			tags:   []string{"hystrixcircuit:" + name},
 		}
 	}
 }
