@@ -2,10 +2,9 @@ package hystrix
 
 import (
 	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
-
-	"sync/atomic"
 
 	. "github.com/smartystreets/goconvey/convey"
 )
@@ -62,6 +61,106 @@ func TestFallback(t *testing.T) {
 				So(cb.metrics.DefaultCollector().Failures().Sum(time.Now()), ShouldEqual, 1)
 				So(cb.metrics.DefaultCollector().FallbackSuccesses().Sum(time.Now()), ShouldEqual, 1)
 			})
+		})
+	})
+}
+
+func TestBadRequest(t *testing.T) {
+	Convey("given a command which fails with a bad request, and whose fallback returns nil", t, func() {
+		defer Flush()
+		fellBack := false
+
+		resultChan := make(chan int)
+		errChan := Go("", func() error {
+			defer func() {
+				resultChan <- 1
+			}()
+			return badRequest{
+				error: fmt.Errorf("error"),
+			}
+		}, func(err error) error {
+			fellBack = true
+			return nil
+		})
+
+		Convey("When the bad request is returned", func() {
+			So(<-resultChan, ShouldEqual, 1)
+
+			Convey("an error should have been returned", func() {
+				err := <-errChan
+				So(err, ShouldNotBeNil)
+				_, ok := err.(BadRequest)
+				Convey("it should be a bad request", func() {
+					So(ok, ShouldBeTrue)
+				})
+			})
+			Convey("fallback should not have been called", func() {
+				So(fellBack, ShouldBeFalse)
+			})
+			Convey("metrics have been recorded properly", func() {
+				time.Sleep(10 * time.Millisecond)
+				cb, _, _ := GetCircuit("")
+				Convey("request was successful", func() {
+					So(cb.metrics.DefaultCollector().Successes().Sum(time.Now()), ShouldEqual, 1)
+					So(cb.metrics.DefaultCollector().Failures().Sum(time.Now()), ShouldEqual, 0)
+				})
+				Convey("fallback had no successes", func() {
+					So(cb.metrics.DefaultCollector().FallbackSuccesses().Sum(time.Now()), ShouldEqual, 0)
+				})
+			})
+		})
+	})
+}
+
+func TestBadRequestInFallback(t *testing.T) {
+	Convey("given a command which fails, and whose fallback returns a bad request", t, func() {
+		defer Flush()
+
+		resultChan := make(chan int)
+		errChan := Go("", func() error {
+			return fmt.Errorf("error")
+		}, func(err error) error {
+			defer func() {
+				resultChan <- 1
+			}()
+			return badRequest{
+				error: fmt.Errorf("bad request"),
+			}
+		})
+
+		Convey("When the bad request occurs in the fallback", func() {
+			So(<-resultChan, ShouldEqual, 1)
+
+			Convey("an error should have been returned", func() {
+				err := <-errChan
+				So(err, ShouldNotBeNil)
+				_, ok := err.(BadRequest)
+				Convey("it should be a bad request", func() {
+					So(ok, ShouldBeTrue)
+				})
+			})
+			Convey("metrics have been recorded properly", func() {
+				time.Sleep(10 * time.Millisecond)
+				cb, _, _ := GetCircuit("")
+				Convey("request was not successful", func() {
+					So(cb.metrics.DefaultCollector().Successes().Sum(time.Now()), ShouldEqual, 0)
+					So(cb.metrics.DefaultCollector().Failures().Sum(time.Now()), ShouldEqual, 1)
+				})
+				Convey("fallback was successful", func() {
+					So(cb.metrics.DefaultCollector().FallbackSuccesses().Sum(time.Now()), ShouldEqual, 1)
+				})
+			})
+		})
+	})
+}
+
+func TestNewBadRequest(t *testing.T) {
+	Convey("when NewBadRequest is called with an error", t, func() {
+		var err error
+		err = NewBadRequest(fmt.Errorf("error"))
+		Convey("It returns a BadRequest", func() {
+			_, ok := err.(BadRequest)
+			So(ok, ShouldBeTrue)
 		})
 	})
 }
