@@ -27,6 +27,16 @@ func TestConfigureTimeout(t *testing.T) {
 	})
 }
 
+func TestConfigureQueueSize(t *testing.T) {
+	Convey("given a command configured for a default queue", t, func() {
+		ConfigureCommand("", CommandConfig{Timeout: 10000})
+
+		Convey("reading the timeout should be the same", func() {
+			So(getSettings("").QueueSizeRejectionThreshold, ShouldEqual, DefaultQueueSizeRejectionThreshold)
+		})
+	})
+}
+
 func TestConfigureRVT(t *testing.T) {
 	Convey("given a command configured to need 30 requests before tripping the circuit", t, func() {
 		ConfigureCommand("", CommandConfig{RequestVolumeThreshold: 30})

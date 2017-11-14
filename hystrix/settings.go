@@ -22,6 +22,7 @@ var (
 
 // Settings Setting for the hystrixCommand
 type Settings struct {
+	CommandName                 string
 	Timeout                     time.Duration
 	CommandGroup                string
 	MaxConcurrentRequests       int
@@ -32,6 +33,7 @@ type Settings struct {
 }
 
 // CommandConfig is used to tune circuit settings at runtime
+// deprecated: use command builder instead
 type CommandConfig struct {
 	Timeout                int    `json:"timeout"`
 	CommandGroup           string `json:"command_group"`
@@ -51,7 +53,16 @@ func init() {
 	settingsMutex = &sync.RWMutex{}
 }
 
+// Initialize initialize the hystrix library with specified circuit
+func Initialize(config *Settings) {
+	settingsMutex.Lock()
+	defer settingsMutex.Unlock()
+
+	circuitSettings[config.CommandName] = config
+}
+
 // Configure applies settings for a set of circuits
+// deprecated: Use command builder along with initialize
 func Configure(cmds map[string]CommandConfig) {
 	for k, v := range cmds {
 		ConfigureCommand(k, v)
@@ -59,9 +70,8 @@ func Configure(cmds map[string]CommandConfig) {
 }
 
 // ConfigureCommand applies settings for a circuit
+// deprecated: Use command builder along with initialize
 func ConfigureCommand(name string, config CommandConfig) {
-	settingsMutex.Lock()
-	defer settingsMutex.Unlock()
 
 	timeout := DefaultTimeout
 	if config.Timeout != 0 {
@@ -98,7 +108,8 @@ func ConfigureCommand(name string, config CommandConfig) {
 		groupName = config.CommandGroup
 	}
 
-	circuitSettings[name] = &Settings{
+	Initialize(&Settings{
+		CommandName:                 name,
 		Timeout:                     time.Duration(timeout) * time.Millisecond,
 		CommandGroup:                groupName,
 		MaxConcurrentRequests:       max,
@@ -106,7 +117,7 @@ func ConfigureCommand(name string, config CommandConfig) {
 		SleepWindow:                 time.Duration(sleep) * time.Millisecond,
 		ErrorPercentThreshold:       errorPercent,
 		QueueSizeRejectionThreshold: queueSizeRejectionThreshold,
-	}
+	})
 }
 
 func getSettings(name string) *Settings {
